@@ -7,7 +7,8 @@ import { useEffect, useRef, useState, startTransition } from "react";
 import {
   getCondition,
   getRecommendedMessage,
-  TASKS,
+  getTasksByIds,
+  pickSessionTaskIds,
   type ConditionId,
   type TaskDefinition,
 } from "@/lib/experiment";
@@ -16,10 +17,12 @@ type SessionState = {
   participantId: string;
   sessionId: string;
   condition: ConditionId;
+  taskIds: string[];
 };
 
 const SESSION_STORAGE_KEY = "humanai-trust-session";
 const LAST_CONDITION_STORAGE_KEY = "humanai-last-condition";
+const LAST_TASK_IDS_STORAGE_KEY = "humanai-last-task-ids";
 const PILL_CLASS =
   "inline-flex rounded-[16px] border border-white/12 bg-black/58 px-4 py-2 text-stone-50 shadow-[0_24px_80px_-45px_rgba(0,0,0,0.85)] backdrop-blur-xl";
 const PANEL_CLASS =
@@ -48,10 +51,30 @@ function getNextAlternatingCondition(): ConditionId {
 }
 
 function buildSession(conditionOverride?: ConditionId | null): SessionState {
+  let previousTaskIds: string[] = [];
+
+  try {
+    const rawTaskIds = window.localStorage.getItem(LAST_TASK_IDS_STORAGE_KEY);
+    const parsedTaskIds = rawTaskIds ? JSON.parse(rawTaskIds) : [];
+
+    if (Array.isArray(parsedTaskIds)) {
+      previousTaskIds = parsedTaskIds.filter(
+        (taskId): taskId is string => typeof taskId === "string",
+      );
+    }
+  } catch {
+    previousTaskIds = [];
+  }
+
+  const taskIds = pickSessionTaskIds(previousTaskIds);
+
+  window.localStorage.setItem(LAST_TASK_IDS_STORAGE_KEY, JSON.stringify(taskIds));
+
   return {
     participantId: createId("P"),
     sessionId: createId("S"),
     condition: conditionOverride ?? getNextAlternatingCondition(),
+    taskIds,
   };
 }
 
@@ -76,7 +99,9 @@ function getStoredSession() {
     if (
       typeof parsed.participantId === "string" &&
       typeof parsed.sessionId === "string" &&
-      (parsed.condition === "A" || parsed.condition === "B")
+      (parsed.condition === "A" || parsed.condition === "B") &&
+      Array.isArray(parsed.taskIds) &&
+      parsed.taskIds.every((taskId) => typeof taskId === "string")
     ) {
       return parsed;
     }
@@ -278,10 +303,13 @@ export function ExperimentRunner() {
     setSelectedChoice(null);
   }, [taskIndex]);
 
-  const task = TASKS[taskIndex];
+  const sessionTasks = session ? getTasksByIds(session.taskIds) : [];
+  const task = sessionTasks[taskIndex];
   const condition = session ? getCondition(session.condition) : null;
   const assistantMessage =
-    session && condition ? getRecommendedMessage(task, session.condition) : "";
+    session && condition && task
+      ? getRecommendedMessage(task, session.condition)
+      : "";
 
   async function handleNext() {
     if (!session || isSubmitting) {
@@ -314,7 +342,7 @@ export function ExperimentRunner() {
       latency_ms: latencyMs,
     };
 
-    const isLastTask = taskIndex === TASKS.length - 1;
+    const isLastTask = taskIndex === sessionTasks.length - 1;
     const nextResponsesRecorded = responsesRecorded + 1;
 
     setResponsesRecorded(nextResponsesRecorded);
@@ -355,7 +383,15 @@ export function ExperimentRunner() {
     );
   }
 
-  if (taskIndex >= TASKS.length) {
+  if (sessionTasks.length === 0) {
+    return (
+      <div className="rounded-[22px] border border-white/12 bg-white/90 p-8 text-sm text-stone-600 shadow-[0_24px_80px_-45px_rgba(0,0,0,0.85)] backdrop-blur-xl">
+        Loading session tasks...
+      </div>
+    );
+  }
+
+  if (taskIndex >= sessionTasks.length) {
     return (
       <div className="mx-auto w-full max-w-3xl space-y-6 rounded-[22px] border border-white/12 bg-white/90 p-8 shadow-[0_24px_80px_-45px_rgba(0,0,0,0.85)] backdrop-blur-xl">
         <h1 className="text-3xl font-semibold text-stone-900">Session Complete</h1>
@@ -388,7 +424,7 @@ export function ExperimentRunner() {
         </div>
       ) : null}
 
-      <ProgressPill current={taskIndex + 1} total={TASKS.length} />
+      <ProgressPill current={taskIndex + 1} total={sessionTasks.length} />
 
       <div className="space-y-5">
         <TaskCard task={task} taskNumber={taskIndex + 1} />
@@ -413,7 +449,7 @@ export function ExperimentRunner() {
           >
             {isSubmitting
               ? "Saving..."
-              : taskIndex === TASKS.length - 1
+              : taskIndex === sessionTasks.length - 1
                 ? "Finish Session"
                 : "Next Task"}
           </button>

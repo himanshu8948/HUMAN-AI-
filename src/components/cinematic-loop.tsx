@@ -4,7 +4,7 @@ export function CinematicLoop() {
   return (
     <div className="absolute inset-0 overflow-hidden">
       <video
-        className="absolute inset-0 h-full w-full scale-[1.08] object-cover object-center contrast-[1.38] brightness-[0.95] saturate-[1.08]"
+        className="absolute inset-0 h-full w-full scale-[1.1] object-cover object-center contrast-[1.52] brightness-[0.9] saturate-[1.18]"
         autoPlay
         loop
         muted
