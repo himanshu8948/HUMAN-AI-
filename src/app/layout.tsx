@@ -13,8 +13,14 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "HumanAI Trust Attribution Prototype",
-  description: "A screening-test prototype for studying trust in AI recommendations.",
+  title: "Human AI Research",
+  description:
+    "A web-based experiment platform for studying trust attribution in AI-assisted decision systems.",
+  icons: {
+    icon: "/icon.svg",
+    shortcut: "/icon.svg",
+    apple: "/icon.svg",
+  },
 };
 
 export default function RootLayout({
